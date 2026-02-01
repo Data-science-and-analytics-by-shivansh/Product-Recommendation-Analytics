@@ -1,1 +1,41 @@
+from fastapi import FastAPI, HTTPException
+from pydantic import BaseModel
+import mlflow.pyfunc
+from src.utils.logger import logger
+from src.config import MLFLOW_TRACKING_URI, MLFLOW_EXPERIMENT_NAME
 
+mlflow.set_tracking_uri(MLFLOW_TRACKING_URI)
+mlflow.set_experiment(MLFLOW_EXPERIMENT_NAME)
+
+app = FastAPI(title="Recommendation System API")
+
+# Load models (in production use model registry)
+# Example: apriori_rules = pd.read_csv("rules.csv")  # or load from MLflow artifact
+try:
+    svd_model = mlflow.pyfunc.load_model("runs:/<your-run-id>/svd_model")  # replace with real run ID or registry
+except Exception:
+    svd_model = None
+    logger.warning("SVD model not loaded - using fallback")
+
+class RecommendRequest(BaseModel):
+    user_id: int
+    n: int = 5
+
+@app.get("/health")
+def health():
+    return {"status": "healthy"}
+
+@app.post("/recommend/collaborative")
+def recommend_collaborative(req: RecommendRequest):
+    if svd_model is None:
+        raise HTTPException(503, "Model not available")
+    try:
+        # Surprise predict needs inner ids; simplify for demo
+        # In real: map user_id → inner uid, get top predictions
+        preds = []  # Placeholder: implement proper top-N logic
+        return {"user_id": req.user_id, "recommendations": preds[:req.n]}
+    except Exception as e:
+        logger.exception("Recommendation error")
+        raise HTTPException(500, "Internal error")
+
+# Add more endpoints: /bundles (from apriori), /content-based, etc.
